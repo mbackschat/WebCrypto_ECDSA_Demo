@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Web Crypto ECDSA Demo</title>
+    <script type='text/javascript' src='js/MooTools-Core-1.5.2-compat-compressed.js'></script>
+    <!-- <link rel="stylesheet" type="text/css" href="css/normalize.css"> -->
+    <link rel="stylesheet" type="text/css" href="css/custom.css">
+</head>
+
+<body>
+    <h1>Web Crypto ECDSA Demo</h1>
+    <p>Demonstrates the following operations: generateKey – exportKey (JWK) – importKey – sign – verify</p>
+    <p>As of August 2016, the demo (at least) works in Firefox and Chrome. See also this <a href="https://diafygi.github.io/webcrypto-examples/">Web Cryptography API Live Table</a></p>
+    <p>Author: <a href="https://github.com/mbackschat">github.com/mbackschat</a></p>
+
+    <div id="log"></div>
+</body>
+
+
+
+
+
+<script type="text/javascript">
+    window.addEvent('load', function() {
+        initLog();
+        next(null, generateKeys);
+    });
+
+
+    const TESTBYTES = new Uint8Array([1, 2, 3, 4]);
+    const TESTBYTES_TAMPERED = new Uint8Array([0, 2, 3, 4]);
+
+    // Crypto algorithm & parameters
+    const ECDSA = {
+        name: "ECDSA",
+        namedCurve: "P-256",
+        hash: {
+            name: "SHA-256"
+        },
+    }
+
+
+    var publicKey;
+    var privateKey;
+
+    var jwkPublicKeyJSON;
+    var jwkPrivateKeyJSON;
+
+    var signatureBASE64;
+
+    // Based on https://github.com/diafygi/webcrypto-examples ; index.html, lines 808 ff.
+
+    function generateKeys() {
+        //P-256
+        window.crypto.subtle.generateKey(ECDSA, true, ["sign", "verify"])
+            .then(function(key) {
+                publicKey = key.publicKey;
+                privateKey = key.privateKey;
+                next("Public/private key generated.", exportKeys);
+            })
+            .catch(error("generateKey failed."));
+    }
+
+    function exportKeys() {
+        //exportKey
+        //jwk
+        window.crypto.subtle.exportKey("jwk", publicKey)
+            .then(function(keydata) {
+                jwkPublicKeyJSON = JSON.stringify(keydata);
+                publicKey = undefined;
+                console.log("JWK Public key:");
+                console.log(jwkPublicKeyJSON);
+
+                window.crypto.subtle.exportKey("jwk", privateKey)
+                    .then(function(keydata2) {
+                        jwkPrivateKeyJSON = JSON.stringify(keydata2);
+                        privateKey = undefined;
+                        console.log("JWK Private key:");
+                        console.log(jwkPrivateKeyJSON);
+
+                        next("Imported public and private keys into JWK JSON.", importPrivateKeyAndSign);
+                    })
+                    .catch(error("Export public key failed."));
+            })
+            .catch(error("Export public key failed."));
+    }
+
+    function importPrivateKeyAndSign() {
+        //importKey private key
+        //jwk
+        window.crypto.subtle.importKey("jwk", JSON.parse(jwkPrivateKeyJSON), ECDSA, false, ["sign"])
+            .then(function(key) {
+                window.crypto.subtle.sign(ECDSA, key, TESTBYTES)
+                    .then(function(sig) {
+                        console.log("Signature: " + sig);
+                        signatureBASE64 = _arrayBufferToBase64(sig);
+                        next(signatureBASE64, importPublicKeyAndVerify);
+                    })
+                    .catch(error("Signing failed."));
+            })
+            .catch(error("Import private key from JWK JSON failed."));
+    }
+
+    function importPublicKeyAndVerify() {
+        //importKey public key
+        //jwk
+        window.crypto.subtle.importKey("jwk", JSON.parse(jwkPublicKeyJSON), ECDSA, false, ["verify"])
+            .then(function(key) {
+                var sig = _base64ToArrayBuffer(signatureBASE64);
+                window.crypto.subtle.verify(ECDSA, key, sig, TESTBYTES)
+                    .then(function(success) {
+                        if (success) {
+                            console.log("Verified successfully.");
+                        } else {
+                            console.error("Verification returned 'false'!");
+                        }
+                        next(null, importPublicKeyAndVerifyTamperedData);
+                    })
+                    .catch(error("Verification failed."));
+            })
+            .catch(error("Import public key from JWK JSON failed."));
+
+    }
+
+    // Just to make sure, that verification actually detects tampered data!
+    function importPublicKeyAndVerifyTamperedData() {
+        //importKey public key
+        //jwk
+        window.crypto.subtle.importKey("jwk", JSON.parse(jwkPublicKeyJSON), ECDSA, false, ["verify"])
+            .then(function(key) {
+                var sig = _base64ToArrayBuffer(signatureBASE64);
+                window.crypto.subtle.verify(ECDSA, key, sig, TESTBYTES_TAMPERED)
+                    .then(function(success) {
+                        if (success) {
+                            console.error("Verified successfully -- should NOT since it's tampered data!");
+                        } else {
+                            console.log("Verification returned 'false'! That's OK since it's tampered data.");
+                        }
+                    })
+                    .catch(error("Verification failed."));
+            })
+            .catch(error("Import public key from JWK JSON failed."));
+
+    }
+
+    // ---------------------- Utility function ----------------------
+
+    // See http://stackoverflow.com/a/9458996/5881415
+    function _arrayBufferToBase64(buffer) {
+        var binary = '';
+        var bytes = new Uint8Array(buffer);
+        var len = bytes.byteLength;
+        for (var i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+    }
+
+    // See http://stackoverflow.com/a/21797381/5881415
+    function _base64ToArrayBuffer(base64) {
+        var binary_string = window.atob(base64);
+        var len = binary_string.length;
+        var bytes = new Uint8Array(len);
+        for (var i = 0; i < len; i++) {
+            bytes[i] = binary_string.charCodeAt(i);
+        }
+        return bytes.buffer;
+    }
+
+    function next(msg, nextFunction) {
+        if (msg != null) {
+            console.log(msg + "\n");
+        }
+        console.log("------ " + nextFunction.name + ":");
+        nextFunction();
+    }
+
+    function error(msg) {
+        return function(ex) {
+            console.error(msg);
+            console.error(ex);
+        }
+    }
+
+    function initLog() {
+        // --- Log Appender
+        var log = document.querySelector('#log');
+        ['trace', 'log', 'warn', 'error'].forEach(function(verb) {
+            var old = console[verb];
+            console[verb] = (function(method, verb, log) {
+                return function() {
+                    old.apply(console, arguments);
+                    var joinedArgs = Array.prototype.slice.call(arguments).join(' ')
+                        // handle distinguishing between methods any way you'd like
+                    var msg = document.createElement('pre');
+                    msg.classList.add(verb);
+                    msg.textContent = /*verb + ': ' +*/ joinedArgs;
+                    log.appendChild(msg);
+                };
+            })(console[verb].bind(console), verb, log);
+            // bind is from mootools
+            // http://mootools.net/core/docs/1.5.2/Types/Function#Function:bind
+        });
+    }
+</script>
+
+</html>

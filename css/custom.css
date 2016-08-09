@@ -1,0 +1,29 @@
+#log {
+    border-width: 1px;
+    border-style: solid;
+    margin: 1em;
+    padding: 1em;
+    border-color: black
+}
+#log .warn {
+    color: orange;
+}
+#log .error {
+    color: red;
+}
+#log .trace {
+    color: lightgray;
+}
+
+pre {
+    white-space: pre-wrap;       /* Since CSS 2.1 */
+    white-space: -moz-pre-wrap;  /* Mozilla, since 1999 */
+    white-space: -pre-wrap;      /* Opera 4-6 */
+    white-space: -o-pre-wrap;    /* Opera 7 */
+    word-wrap: break-word;       /* Internet Explorer 5.5+ */
+}
+
+button {
+  /*text-rendering: optimizeLegibility;*/
+  font-size:100%;
+}
